@@ -40,3 +40,10 @@ Abstract:
     Rust parallelism guide: Fearless Concurrency - The Rust Programming Language. (n.d.). https://doc.rust-lang.org/book ch16-00-concurrency.html 
     
     Parallel techniques in Go: S. (2023, October 16). Understanding Concurrency and Parallelism in Go(Golang). Medium. https://medium.com/@ksandeeptech07/understanding-concurrency-and-parallelism-in-go-golang-f53afaf0387b
+
+
+Commands to parallelize:
+- Grep
+- sed
+- Chaining together commands that cannot be parallelized
+- Find?
