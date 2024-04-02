@@ -1,6 +1,6 @@
 March 1, 2024
 
-Research Project:
+Research Project:  
     Liam Herkins, Aaron Nyaanga, and Alberto Jimenez
 
 Abstract:
