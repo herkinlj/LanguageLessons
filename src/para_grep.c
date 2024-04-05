@@ -34,7 +34,7 @@
 #endif
 
 #include <sys/cdefs.h>
-__RCSID("$NetBSD: grep.c,v 1.16 2022/10/15 21:53:22 andvar Exp $");
+// __RCSID("$NetBSD: grep.c,v 1.16 2022/10/15 21:53:22 andvar Exp $");
 
 #include <sys/stat.h>
 #include <sys/types.h>
@@ -55,6 +55,7 @@ __RCSID("$NetBSD: grep.c,v 1.16 2022/10/15 21:53:22 andvar Exp $");
 #include "grep.h"
 #ifdef _OPENMP
 #include <omp.h>
+#endif
 #ifndef WITHOUT_NLS
 #include <nl_types.h>
 nl_catd	 catalog;
@@ -155,7 +156,7 @@ extern char	*__progname;
 /*
  * Prints usage information and returns 2.
  */
-__dead static void
+ static void
 usage(void)
 {
 	fprintf(stderr, getstr(4), __progname);
