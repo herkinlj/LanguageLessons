@@ -92,28 +92,48 @@ void sort_bash_second(int argc, char *argv[], opt *flags) {
  */
 int collect_flags(char ch, opt *flags) {
   int state = 1;
-  if (ch == 'e') {
-    flags->e += 1;
-    state = 0;
-  } else if (ch == 'i') {
-    flags->i += 1;
-  } else if (ch == 'v') {
-    flags->v += 1;
-  } else if (ch == 'c') {
-    flags->c += 1;
-  } else if (ch == 'l') {
-    flags->l += 1;
-  } else if (ch == 'n') {
-    flags->n += 1;
-  } else if (ch == 'h') {
-    flags->h += 1;
-  } else if (ch == 's') {
-    flags->s += 1;
-  } else if (ch == 'f') {
-    flags->f += 1;
-    state = 0;
-  } else if (ch == 'o') {
-    flags->o += 1;
+  
+  if (!flags)
+  {
+      exit(1);
+  }
+
+  switch (ch)
+  {
+      case 'e':
+          flags->e += 1;
+          state = 0;
+          break;
+      case 'i':
+          flags->i += 1;
+          break;
+      case 'v':
+          flags->v += 1;
+          break;
+      case 'c':
+          flags->c += 1;
+          break;
+      case 'l':
+          flags->i += 1;
+          break;
+      case 'n':
+          flags->n += 1;
+          break;
+      case 'h':
+          flags->h += 1;
+          break;
+      case 's':
+          flags->s += 1;
+          break;
+      case 'f':
+          flags->f += 1;
+          state = 1;
+          break;
+      case 'o':
+          flags->o += 1;
+          break;
+      default:
+          break;
   }
   return state;
 }
