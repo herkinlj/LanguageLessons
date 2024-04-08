@@ -1,5 +1,10 @@
 #include "grep.h"
-
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+#include <pthread.h>
+#include <stdlib.h>
+#include <stdio.h>
 /**
  * @brief Starts the program in general.
  *
