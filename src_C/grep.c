@@ -1,13 +1,13 @@
 #include "grep.h"
 
 /**
- * @brief Запускает программу в целом.
+ * @brief Starts the program in general.
  *
- * @param argc количество аргументов командной строки
- * @param argv вектор (набор) аргументов командной строки
- * @return int код ошибки:
+ * @param argc quantity of command line arguments
+ * @param argv vector (set) of command line arguments
+ * @return int error code:
  * 0 - OK;
- * 1 - не удалось выделит память для корректной работы программы
+ * 1 - it was not possible to allocate memory for the correct operation of the program
  */
 int main(int argc, char *argv[]) {
   int state = 0;
@@ -82,13 +82,13 @@ void sort_bash_second(int argc, char *argv[], opt *flags) {
 }
 
 /**
- * @brief Принимает флаги s21_grep (grep) из аргументов командной строки.
+ * @brief Accepts s21_grep (grep) flags from command line arguments.
  *
- * @param ch символ
- * @param flags структура с флагами
- * @return int код ошибки:
+ * @param ch symbol
+ * @param flags structure with flags
+ * @return int error code:
  * 0 - OK;
- * 1 - некорректные аргументы командной строки;
+ * 1 - incorrect command line arguments;
  */
 int collect_flags(char ch, opt *flags) {
   int state = 1;
@@ -138,13 +138,15 @@ int collect_flags(char ch, opt *flags) {
   return state;
 }
 
+
+
 /**
- * @brief Выделяет необходимое количество памяти.
+ * @brief Allocates the required amount of memory.
  *
- * @param flags набор флагов s21_grep (grep) из аргументов командной строки
- * @return int код ошибки:
+ * @param flags set of flags s21_grep (grep) from command line arguments
+ * @return int error code:
  * 0 - OK;
- * int > 0 - не удалось выделить память;
+ * int > 0 - failed to allocate memory;
  */
 int get_memory(opt *flags) {
   int state = 0;
@@ -177,9 +179,9 @@ int get_memory(opt *flags) {
 }
 
 /**
- * @brief Очищает память.
+ * @brief Clears memory.
  *
- * @param flags набор флагов s21_grep (grep) из аргументов командной строки
+ * @param flags set of flags s21_grep (grep) from command line arguments
  */
 void free_memory(opt *flags) {
   for (size_t i = 0; i < 2048; ++i) {
@@ -190,10 +192,10 @@ void free_memory(opt *flags) {
 }
 
 /**
- * @brief Добавляет набор символов для паттерна из файла.
+ * @brief Adds a set of symbols for the pattern from the file.
  *
- * @param filename название файла
- * @param flags набор флагов s21_grep (grep) из аргументов командной строки
+ * @param filename the name of the file
+ * @param flags set of flags s21_grep (grep) from command line arguments
  */
 void add_pattern_from_file(char *filename, opt *flags) {
   FILE *stream = NULL;
@@ -218,10 +220,10 @@ void add_pattern_from_file(char *filename, opt *flags) {
 }
 
 /**
- * @brief Добавяет набор символов для паттерна s21_grep (grep).
+ * @brief Adds a set of symbols for pattern s21_grep (grep).
  *
- * @param patternname набор символов для паттерна
- * @param flags набор флагов s21_grep (grep) из аргументов командной строки
+ * @param patternname set of symbols for the pattern
+ * @param flags set of flags s21_grep (grep) from command line arguments
  */
 void add_pattern(char *patternname, opt *flags) {
   if (flags->pattern_length != 0) {
@@ -237,12 +239,11 @@ void add_pattern(char *patternname, opt *flags) {
     flags->pattern_length += strlen(patternname);
   }
 }
-
 /**
- * @brief Увеличивает количество файлов в структуре флагов s21_grep (grep).
+ * @brief Increases the number of files in the flag structure s21_grep (grep).
  *
- * @param filename название файла
- * @param flags набор флагов s21_grep (grep) из аргументов командной строки
+ * @param filename the name of the file
+ * @param flags set of flags s21_grep (grep) from command line arguments
  */
 void add_file(char *filename, opt *flags) {
   strcpy(flags->files[flags->files_number], filename);
@@ -250,9 +251,9 @@ void add_file(char *filename, opt *flags) {
 }
 
 /**
- * @brief Создаёт паттеры.
+ * @brief Create patterns.
  *
- * @param flags набор флагов s21_grep (grep) из аргументов командной строки
+ * @param flags set of flags s21_grep (grep) from command line arguments
  */
 void make_pcre_patterns(opt *flags) {
   char str[1024] = {0};
@@ -320,11 +321,11 @@ void make_pcre_patterns(opt *flags) {
 }
 
 /**
- * @brief Создаёт объект паттерна для флага
+ * @brief Create an object pattern for a flag
  *
- * @param flags набор флагов s21_grep (grep) из аргументов командной строки
- * @param pattername набор символов в паттерне
- * @return pcre* готовый паттерн
+ * @param flags set of flags s21_grep (grep) from command line arguments
+ * @param pattername set of symbols in the pattern
+ * @return pcre* ready pattern
  */
 pcre *create_pattern(opt *flags, char *pattername) {
   const char *error = NULL;
@@ -344,11 +345,11 @@ pcre *create_pattern(opt *flags, char *pattername) {
 }
 
 /**
- * @brief Применяет флаг -o для s21_grep (grep): печатает только совпадающие
- * (непустые) части совпавшей строки.
+ * @brief Применяет флаг -o для s21_grep (grep): печатает только компаниющие
+ * (empty) parts of the matched line.
  *
- * @param flags набор флагов s21_grep (grep) из аргументов командной строки
- * @param str строка, которую ищем
+ * @param flags set of flags s21_grep (grep) from command line arguments
+ * @param str the string to search for
  */
 void run_flag_o(opt *flags, char *str) {
   int count = 0;
