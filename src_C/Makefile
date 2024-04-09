@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -Wall -Werror -Wextra -std=c11 -c
+CFLAGS = -I/shared/common/hyperscan/include/hs -Wall -Werror -Wextra -std=c11 -c
 OS = $(shell uname -s)
 TEST_DIR = grep_tests
 FUNC_TESTS = test_func_grep

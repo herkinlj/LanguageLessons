@@ -5,6 +5,7 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <hs_compile.h>
 /**
  * @brief Starts the program in general.
  *
