@@ -41,7 +41,9 @@ void sort_bash_first(int argc, char *argv[], opt *flags) {
   }
 }
 
+
 void sort_bash_second(int argc, char *argv[], opt *flags) {
+  // integer representation of boolean
   int out = 0;
   int letter_e = 0, letter_f = 0;
   int was_a_pattern = 0;
@@ -106,35 +108,45 @@ int collect_flags(char ch, opt *flags) {
 
   switch (ch)
   {
+     // -e pattern
       case 'e':
           flags->e += 1;
           state = 0;
           break;
+     // -i Ignore uppercase vs. lowercase
       case 'i':
           flags->i += 1;
           break;
+     // -v Invert match
       case 'v':
           flags->v += 1;
           break;
+     // -c Output count of matching lines only
       case 'c':
           flags->c += 1;
           break;
+     // -l Output matching files only
       case 'l':
           flags->i += 1;
           break;
+     // -n Precede each matching line with a line number
       case 'n':
           flags->n += 1;
           break;
+     // -h Output matching lines without preceding them by file names
       case 'h':
           flags->h += 1;
           break;
+     // -s Suppress error messages without preceding them by file names
       case 's':
           flags->s += 1;
           break;
+     // -f <file> Take regexes from a file
       case 'f':
           flags->f += 1;
           state = 1;
           break;
+     // Output the matched parts of a matching line
       case 'o':
           flags->o += 1;
           break;
