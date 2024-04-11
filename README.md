@@ -41,6 +41,9 @@ Abstract:
     
     Parallel techniques in Go: S. (2023, October 16). Understanding Concurrency and Parallelism in Go(Golang). Medium. https://medium.com/@ksandeeptech07/understanding-concurrency-and-parallelism-in-go-golang-f53afaf0387b
 
+    Go Implementation of Grep Resource Used:
+    https://github.com/ishan-p/go-grep/
+
 
 Commands to parallelize:
 - Grep
