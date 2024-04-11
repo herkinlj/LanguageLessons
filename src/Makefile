@@ -1,6 +1,6 @@
 CC=gcc
-CFLAGS=-Wall -Wextra -pedantic -std=c11 -O2 -fopenmp 
-LDFLAGS=-lm -pthread  
+CFLAGS=-Wall -Wextra -pedantic -std=c99 -O2 -fopenmp  # Adjust optimization level and OpenMP flags as needed
+LDFLAGS=-lm -pthread  # Add any additional linker flags if needed
 
 EXECUTABLE=para_grep
 
