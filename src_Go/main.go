@@ -13,6 +13,6 @@ func main() {
 		fmt.Println("Usage: ./go-grep search_query filename.txt")
 		return
 	}
-
+ 
 	Grep(searchQuery, inputFile)
 }
