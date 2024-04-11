@@ -18,6 +18,8 @@
 int main(int argc, char *argv[]) {
   int state = 0;
   opt flags = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL};
+  // if get_memory returns 1, failure to allocate memory for files
+  // if get_memory returns 2, failure to allocate memory for regex chars
   if (get_memory(&flags) == 0) {
     sort_bash_first(argc, argv, &flags);
     sort_bash_second(argc, argv, &flags);
@@ -168,7 +170,9 @@ int collect_flags(char ch, opt *flags) {
  */
 int get_memory(opt *flags) {
   int state = 0;
+  // maxiumum number of files/filenames == 2048
   flags->files = (char **)calloc(2048, sizeof(char *));
+  // maximum number of characters allowed in regex patterns
   flags->patterns = (char *)calloc(2048, sizeof(char));
   if (flags->files == NULL) {
     state = 1;
