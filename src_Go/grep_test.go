@@ -13,7 +13,7 @@ func TestListFilesInDirLen(t *testing.T) {
 		t.Fatalf(`listFilesInDir(%v) = %v, want %v`, inputDir, len(val), countFilesInDir)
 	}
 }
-
+ 
 type FindTestCase struct {
 	searchQuery string
 	inputText   string

@@ -9,3 +9,4 @@ clean:
 	@echo "Cleaning up..."
 	rm grep
 	go clean
+ 
