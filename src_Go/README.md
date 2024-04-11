@@ -15,7 +15,7 @@ I found the search_string in the file.
 ```
 
 - [-] Ability to search for a string from standard input
-
+ 
 ```
 $ ./go-grep foo
 bar

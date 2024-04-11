@@ -49,7 +49,7 @@ func Grep(searchQuery string, inputFile string) {
 	close(resultSyncChannel)
 	close(quit)
 }
-
+ 
 func listFilesInDir(rootFilePath string) []string {
 	inputFiles := []string{}
 	err := filepath.Walk(rootFilePath,
