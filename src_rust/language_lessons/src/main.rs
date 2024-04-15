@@ -1,3 +1,9 @@
+extern create rayon;
+extern create regex;
+extern create structopt;
+extern create walkdir;
+extern create colored;
+
 use std::fs::File;
 use std::io;
 use std::io::Read;

@@ -1,407 +1,516 @@
-#include "grep.h"
-#ifdef _OPENMP
-#include <omp.h>
-#endif
-#include <pthread.h>
-#include <stdlib.h>
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+
+/* Copyright (c) 2016 by Peng (Patric)  Zhao
+ *  \file ParallelGrep.cc
+ *  Email: patric.zhao@gmail.com
+ */
+
+
+/****************************************************************************
+ *				INCLUDE
+ ****************************************************************************/
+
+#define _XOPEN_SOURCE 500
+
 #include <stdio.h>
-#include <hs_compile.h>
-/**
- * @brief Starts the program in general.
- *
- * @param argc quantity of command line arguments
- * @param argv vector (set) of command line arguments
- * @return int error code:
- * 0 - OK;
- * 1 - it was not possible to allocate memory for the correct operation of the program
- */
-int main(int argc, char *argv[]) {
-  int state = 0;
-  opt flags = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, NULL, NULL};
-  // if get_memory returns 1, failure to allocate memory for files
-  // if get_memory returns 2, failure to allocate memory for regex chars
-  if (get_memory(&flags) == 0) {
-    sort_bash_first(argc, argv, &flags);
-    sort_bash_second(argc, argv, &flags);
-    make_pcre_patterns(&flags);
-    free_memory(&flags);
-  } else {
-    state = 1;
-  }
-  return state;
+#include <stdlib.h>
+#include <ctype.h>
+#include <fcntl.h>                      /* For open()                       */
+#include <unistd.h>                     /* For close(), lseek()             */
+#include <sys/types.h>                  /* For opendir(), readdir(), closedir()   */
+#include <dirent.h>
+#include <sys/stat.h>                   /* For stat()/lstat() structure     */
+#include <pthread.h>                    /* For pthread_ functions           */
+#include <string.h>                     /* For strstr()                     */
+#include <ftw.h>                        /* For ftw()/nftw()                 */
+
+#define KB             1024             /* 1K                               */
+#define MB             (1024*1024)      /* 1M                               */
+#define LINEBUF        (4*KB)
+#define THREADSNUM     8
+#define threshold      2
+#define MAXFILES       4096
+
+
+/****************************************************************************
+ *                            CONSTANTS                                     *
+ ****************************************************************************/
+/* Save the PATTERN */
+const char *targetString_G   = NULL;
+
+/****************************************************************************
+ *                           STATIC VARIABLES                               *
+ ****************************************************************************/
+static int grepDirRec         = 0;
+static int useOption          = 0;
+static int indexFile          = 0;
+static int finishedGrepSubDir = 0;
+
+/****************************************************************************
+ *			     PTHREAD DECLARATION			                                      *
+ ****************************************************************************/
+pthread_t workThread[THREADSNUM];
+pthread_t workThreadPool[THREADSNUM];
+static pthread_mutex_t  workThreadPoolMux               = PTHREAD_MUTEX_INITIALIZER;
+//static pthread_cond_t   workThreadPoolCond              = PTHREAD_COND_INITIALIZER;
+
+/****************************************************************************
+ *			     STRUCTURE DECLARATION			                                    *
+ ****************************************************************************/
+struct task {
+    char *fname;
+    int   outputPath;
+    long  start;
+    long  end;
+};
+
+struct tasklist {
+    struct task      task;
+    struct tasklist *next;
+};
+
+struct tasklist *plHead=NULL, *plTail=NULL;
+
+/****************************************************************************
+ *				GLOBAL FUNCTIONS			                                            *
+ ****************************************************************************/
+
+
+/****************************************************************************
+ * function    : help
+ * description : print usage
+ * argument(s) :
+ * return      : NULL
+ ****************************************************************************/
+void
+help()
+{
+    printf ("Usage : grep [option] PATTERN [FILE|DIRECTORY] \n");
 }
 
-void sort_bash_first(int argc, char *argv[], opt *flags) {
-  int has_flags = 1;
-  for (int i = 1; i < argc; i++) {
-    if (argv[i][0] == '-') {
-      for (int j = 1; argv[i][j] != '\0' && has_flags; j++) {
-        has_flags = collect_flags(argv[i][j], flags);
-      }
-      has_flags = 1;
+
+/****************************************************************************
+ * function    : parseArg
+ * description : split the arguments from command line.
+ * argument(s) :
+ * return      :
+ ****************************************************************************/
+void
+parseArg(int num, char *string[])
+{
+    //TODO: Does not support the options such as -r, -i. Need to enhance.
+    if ( num < 3) {
+        printf("Error: Incorrect arguments!\n");
+        help();
+        exit (0);
     }
-  }
-}
 
-
-void sort_bash_second(int argc, char *argv[], opt *flags) {
-  // integer representation of boolean
-  int out = 0;
-  int letter_e = 0, letter_f = 0;
-  int was_a_pattern = 0;
-
-  int option = (flags->e || flags->f) ? 1 : 0;
-  if (option) {
-    for (int i = 1; i < argc; i++) {
-      if (argv[i][0] == '-') {
-        for (int j = 1; argv[i][j] != '\0' && !out; j++) {
-          if (argv[i][j] == 'e' && argv[i][j + 1] != '\0') {
-            add_pattern(&argv[i][j + 1], flags);
-            out = 1;
-          } else if (argv[i][j] == 'f' && argv[i][j + 1] != '\0') {
-            add_pattern_from_file(&argv[i][j + 1], flags);
-          } else if (argv[i][j] == 'e' && argv[i][j + 1] == '\0') {
-            letter_e = 1;
-          } else if (argv[i][j] == 'f' && argv[i][j + 1] == '\0') {
-            letter_f = 1;
-          }
-        }
-      } else {
-        if (letter_f) {
-          add_pattern_from_file(argv[i], flags);
-          letter_f = 0;
-        } else if (letter_e) {
-          add_pattern(argv[i], flags);
-          letter_e = 0;
-        } else {
-          add_file(argv[i], flags);
-        }
-      }
-      out = 0;
-    }
-  } else {
-    for (int i = 1; i < argc; i++) {
-      if (argv[i][0] != '-' && !was_a_pattern) {
-        add_pattern(argv[i], flags);
-        was_a_pattern = 1;
-      } else if (argv[i][0] != '-') {
-        add_file(argv[i], flags);
-      }
-    }
-  }
-}
-
-/**
- * @brief Accepts s21_grep (grep) flags from command line arguments.
- *
- * @param ch symbol
- * @param flags structure with flags
- * @return int error code:
- * 0 - OK;
- * 1 - incorrect command line arguments;
- */
-int collect_flags(char ch, opt *flags) {
-  int state = 1;
-  
-  if (!flags)
-  {
-      exit(1);
-  }
-
-  switch (ch)
-  {
-     // -e pattern
-      case 'e':
-          flags->e += 1;
-          state = 0;
-          break;
-     // -i Ignore uppercase vs. lowercase
-      case 'i':
-          flags->i += 1;
-          break;
-     // -v Invert match
-      case 'v':
-          flags->v += 1;
-          break;
-     // -c Output count of matching lines only
-      case 'c':
-          flags->c += 1;
-          break;
-     // -l Output matching files only
-      case 'l':
-          flags->i += 1;
-          break;
-     // -n Precede each matching line with a line number
-      case 'n':
-          flags->n += 1;
-          break;
-     // -h Output matching lines without preceding them by file names
-      case 'h':
-          flags->h += 1;
-          break;
-     // -s Suppress error messages without preceding them by file names
-      case 's':
-          flags->s += 1;
-          break;
-     // -f <file> Take regexes from a file
-      case 'f':
-          flags->f += 1;
-          state = 1;
-          break;
-     // Output the matched parts of a matching line
-      case 'o':
-          flags->o += 1;
-          break;
-      default:
-          break;
-  }
-  return state;
-}
-
-
-
-/**
- * @brief Allocates the required amount of memory.
- *
- * @param flags set of flags s21_grep (grep) from command line arguments
- * @return int error code:
- * 0 - OK;
- * int > 0 - failed to allocate memory;
- */
-int get_memory(opt *flags) {
-  int state = 0;
-  // maxiumum number of files/filenames == 2048
-  flags->files = (char **)calloc(2048, sizeof(char *));
-  // maximum number of characters allowed in regex patterns
-  flags->patterns = (char *)calloc(2048, sizeof(char));
-  if (flags->files == NULL) {
-    state = 1;
-    free(flags->files);
-  }
-  if (flags->patterns == NULL) {
-    state = 2;
-    free(flags->patterns);
-  }
-  if (flags->files != NULL && flags->patterns != NULL) {
-    for (int i = 0; i < 2048 && state == 0; i++) {
-      flags->files[i] = (char *)calloc(2048, sizeof(char));
-      if (flags->files[i] == NULL) {
-        for (int j = 0; j < i; j++) {
-          free(flags->files[i]);
-        }
-        free(flags->files);
-        free(flags->patterns);
-        state = 2;
-      }
-    }
-  } else {
-    state = 1;
-  }
-  return state;
-}
-
-/**
- * @brief Clears memory.
- *
- * @param flags set of flags s21_grep (grep) from command line arguments
- */
-void free_memory(opt *flags) {
-  for (size_t i = 0; i < 2048; ++i) {
-    free(flags->files[i]);
-  }
-  free(flags->files);
-  free(flags->patterns);
-}
-
-/**
- * @brief Adds a set of symbols for the pattern from the file.
- *
- * @param filename the name of the file
- * @param flags set of flags s21_grep (grep) from command line arguments
- */
-void add_pattern_from_file(char *filename, opt *flags) {
-  FILE *stream = NULL;
-  stream = fopen(filename, "r");
-  char str[1024] = {0};
-  if (stream) {
-    while (!feof(stream)) {
-      str[0] = '\0';
-      fgets(str, sizeof(str), stream);
-      for (int c = 0; str[c] != EOF && str[c] != '\0'; c++) {
-        if (str[c] == '\n' && c > 0 && strlen(str) > 1) {
-          str[c] = '\0';
-        }
-      }
-      add_pattern(str, flags);
-    }
-    fclose(stream);
-  } else {
-    free_memory(flags);
-    exit(1);
-  }
-}
-
-/**
- * @brief Adds a set of symbols for pattern s21_grep (grep).
- *
- * @param patternname set of symbols for the pattern
- * @param flags set of flags s21_grep (grep) from command line arguments
- */
-void add_pattern(char *patternname, opt *flags) {
-  if (flags->pattern_length != 0) {
-    flags->patterns[flags->pattern_length++] = '|';
-  }
-  if (patternname[0] == ')') {
-    flags->patterns[flags->pattern_length++] = '\'';
-    flags->patterns[flags->pattern_length++] = '\\';
-    flags->patterns[flags->pattern_length++] = ')';
-    flags->patterns[flags->pattern_length++] = '\'';
-  } else {
-    strcpy(&flags->patterns[flags->pattern_length], patternname);
-    flags->pattern_length += strlen(patternname);
-  }
-}
-/**
- * @brief Increases the number of files in the flag structure s21_grep (grep).
- *
- * @param filename the name of the file
- * @param flags set of flags s21_grep (grep) from command line arguments
- */
-void add_file(char *filename, opt *flags) {
-  strcpy(flags->files[flags->files_number], filename);
-  flags->files_number += 1;
-}
-
-/**
- * @brief Create patterns.
- *
- * @param flags set of flags s21_grep (grep) from command line arguments
- */
-void make_pcre_patterns(opt *flags) {
-  char str[1024] = {0};
-  str[0] = '\0';
-  int buffer[1024] = {0};
-  int count = 0, lines_amount = 0;
-  int c_flag_amount = 0, out = 1;
-  pcre *pattern = create_pattern(flags, flags->patterns);
-  for (size_t i = 0; i < flags->files_number; i++) {
-    FILE *fptr = fopen(flags->files[i], "r");
-    if (fptr) {
-      while (!(feof(fptr))) {
-        lines_amount++;
-        str[0] = '\0';
-        fgets(str, sizeof(str), fptr);
-        count = pcre_exec(pattern, NULL, str, strlen(str), 0, 0, buffer,
-                          sizeof(buffer));
-        if (count && strlen(str)) {
-          if ((count > 0 && !(flags->v)) || (count < 0 && flags->v)) {
-            if (flags->files_number > 1 && (!(flags->l) || flags->c) &&
-                !(flags->h) && out) {
-              printf("%s:", flags->files[i]);
-            }
-            if (flags->n && !(flags->l) && !(flags->c)) {
-              printf("%d:", lines_amount);
-            }
-            if (flags->c) {
-              out = 0;
-              c_flag_amount++;
-            }
-            if (flags->l) {
-              if (flags->c) {
-                printf("%d\n", c_flag_amount);
-              }
-              printf("%s\n", flags->files[i]);
-              break;
-            }
-            if (!(flags->c) && (!(flags->o) || (flags->v))) {
-              printf("%s", str);
-              if (str[strlen(str) - 1] != '\n') {
-                printf("\n");
-              }
-            }
-            if (flags->o && !(flags->c)) {
-              run_flag_o(flags, str);
-            }
-          }
-        }
-      }
-      if (count && flags->c && (!(flags->l) || !c_flag_amount)) {
-        if (flags->files_number > 1 && !(flags->h) && c_flag_amount == 0) {
-          printf("%s:", flags->files[i]);
-        }
-        printf("%d\n", c_flag_amount);
-      }
-      out = 1;
-      c_flag_amount = 0;
-      fclose(fptr);
-    }
-    lines_amount = 0;
-  }
-  if (pattern) {
-    free(pattern);
-  }
-}
-
-/**
- * @brief Create an object pattern for a flag
- *
- * @param flags set of flags s21_grep (grep) from command line arguments
- * @param pattername set of symbols in the pattern
- * @return pcre* ready pattern
- */
-pcre *create_pattern(opt *flags, char *pattername) {
-  const char *error = NULL;
-  int num_error = 0;
-  pcre *pattern = NULL;
-  if (flags->i) {
-    pattern = pcre_compile(pattername, PCRE_CASELESS, &error, &num_error, NULL);
-  } else {
-    pattern = pcre_compile(pattername, 0, &error, &num_error, NULL);
-  }
-  if (!pattern) {
-    free_memory(flags);
-    free(pattern);
-    exit(num_error);
-  }
-  return pattern;
-}
-
-/**
- * @brief Применяет флаг -o для s21_grep (grep): печатает только компаниющие
- * (empty) parts of the matched line.
- *
- * @param flags set of flags s21_grep (grep) from command line arguments
- * @param str the string to search for
- */
-void run_flag_o(opt *flags, char *str) {
-  int count = 0;
-  int buffer[1024] = {0};
-  char *start_pos = NULL;
-  int single_pattern_pos = 0;
-  long unsigned int present_pos = 0;
-  char single_pattern[1024] = {0};
-  single_pattern[0] = '\0';
-  start_pos = str;
-  for (size_t c = 0; c <= strlen(flags->patterns); c++) {
-    if (flags->patterns[c] == '|' || flags->patterns[c] == '\0') {
-      single_pattern[single_pattern_pos] = '\0';
-      single_pattern_pos = 0;
-      pcre *pattern = create_pattern(flags, single_pattern);
-      while ((strlen(start_pos) >= strlen(single_pattern)) &&
-             (count = pcre_exec(pattern, NULL, start_pos, strlen(str), 0, 0,
-                                buffer, sizeof(buffer))) > 0 &&
-             (strlen(str) >= (present_pos + buffer[1] - 1))) {
-        for (int i = buffer[0]; i < buffer[1]; i++) {
-          putchar(start_pos[i]);
-        }
-        printf("\n");
-        start_pos = &start_pos[buffer[1]];
-        present_pos += buffer[1];
-      }
-      free(pattern);
+    //TODO: Hardcode now, will enhance in the future for usability.
+    if (!strcmp(string[1],"-r")) {
+        useOption          = 1;
+        grepDirRec         = 1;
+        indexFile          = 3;
+        targetString_G     = string[2];
     } else {
-      single_pattern[single_pattern_pos++] = flags->patterns[c];
+        useOption          = 0;
+        grepDirRec         = 0;
+        // The search destination is from the argv[2] since the argv[0] and argv[1] are program name and target string.
+        indexFile          = 2;
+        targetString_G     = string[1];
     }
-  }
-  start_pos = NULL;
+}
+
+/****************************************************************************
+ * function    : grepFile
+ * description : search the PATTERN in the specified file and print out the results.
+ * argument(s) : a structure with four elements.
+ *               fname ,  file name
+ *               start ,  the location to begin search. For sequential algorithm,
+ *                        start point is zero.
+ *               end   ,  the location to end search. For sequential algorithm,
+ *                        this is the size of the file.
+ *               outputPath  ,  1 (print the path) or 0 ( don't print the path)
+ * return      : NULL
+ ****************************************************************************/
+void*
+grepFile(void *arg) {
+    struct task *file = arg;
+    FILE *fp_status;
+    char  buf[LINEBUF];
+    long  ret = 0;
+    long  totalSize = file->end - file->start;
+    long  leftSize  = totalSize;
+
+    if(!(fp_status = fopen(file->fname, "r"))) {
+	    printf("Error: File open failed : %s\n", file->fname);
+        return NULL;
+    }
+
+    // Starting from the specified point.
+    if (fseek(fp_status, file->start, SEEK_SET) != 0) {
+        fclose(fp_status);
+        return NULL;
+    }
+
+    while (leftSize > 0 && fgets(buf, LINEBUF, fp_status)) {
+        if (strstr(buf, targetString_G) != NULL) {
+            if ( file->outputPath == 0 ) {
+                printf("%s", buf);
+            } else {
+                printf("%s:%s", file->fname, buf);
+            }
+        }
+        ret = strlen(buf);
+        leftSize -= ret;
+    }
+    fclose(fp_status);
+
+	return NULL;
+}
+
+
+/****************************************************************************
+ * function    : workThreadPoolFun
+ * description : The work thread from thread pool.
+ *               Retrieve the file from free list and grep.Exit when no any available task in the list.
+ * argument(s) : Needn't
+ * return      : NULL
+ ****************************************************************************/
+void*
+workThreadPoolFun(void *arg)
+{
+    struct tasklist *plTmp = NULL;
+
+    while (1) {
+        pthread_mutex_lock(&workThreadPoolMux);
+		    // TODO: Awake by a signal from main thread to avoid "while" loop
+		    //       in order to save the CPU resources.
+        //pthread_cond_wait(&workThreadPoolCond, &workThreadPoolMux);
+        if (plHead != NULL && plHead->next != NULL) {
+           // Get task from the tail of the list.
+           if (plHead->next == plTail) {
+                plTmp        = plTail;
+                plTail       = plHead;
+                plTail->next = NULL;
+            } else {
+                plTmp        = plHead->next;
+                plHead->next = plTmp->next;
+                plTmp->next  = NULL;
+            }
+            pthread_mutex_unlock(&workThreadPoolMux);
+
+            grepFile((void *)&plTmp->task);
+
+			      // free memory from malloc/strdup by addFilesIntoFreeList
+            if (plTmp->task.fname != NULL) {
+                free(plTmp->task.fname);
+                plTmp->task.fname = NULL;
+            }
+
+            if (plTmp != NULL) {
+                free(plTmp);
+                plTmp = NULL;
+            }
+        } else {
+            // All tasks are finished so exit, otherwise continue wait the new task
+            // added into list.
+            if (finishedGrepSubDir == 1) {
+                pthread_mutex_unlock(&workThreadPoolMux);
+                pthread_exit(NULL);
+            }
+            pthread_mutex_unlock(&workThreadPoolMux);
+        }
+    }
+}
+
+
+/****************************************************************************
+ * function    : initThreadPool
+ * description : create THREADSNUM threads to work later.
+ * argument(s) :
+ * return      : return number of available threads.
+ ****************************************************************************/
+int
+initThreadPool()
+{
+    // create threads pool
+    int i     = 0;
+    int error = 0;
+    int num   = 0;
+
+    for (i = 0; i < THREADSNUM; i++) {
+        error = pthread_create(&workThreadPool[i], NULL, workThreadPoolFun, NULL);
+        if (error != 0) {
+            break;
+        }
+        ++num;
+    }
+
+    return num;
+}
+
+
+/****************************************************************************
+ * function    : joinThreadPool
+ * description : wait all threads finish.
+ * argument(s) :
+ * return      :
+ ****************************************************************************/
+void
+joinThreadPool()
+{
+    int i = 0;
+
+    // wait working thread to join
+    for (i = 0; i < THREADSNUM; i++) {
+        pthread_join(workThreadPool[i],NULL);
+    }
+
+    return;
+}
+
+
+/****************************************************************************
+ * function    : addFilesIntoFreeList
+ * description : add the file into the tail of free list.
+ * argument(s) :
+ * return      : 0 (continue) or other (break from nftw)
+ ****************************************************************************/
+static int
+addFilesIntoFreeList(const char *fpath, const struct stat *sb,
+             int tflag, struct FTW *ftwbuf)
+{
+
+    struct tasklist *plTmp = NULL;
+
+    if (tflag == FTW_F) {
+
+       // Add a file in tail of the task list.
+       plTmp = (struct tasklist *) malloc (sizeof(struct tasklist));
+       if (plTmp == NULL) {
+           // No enough memory to save file info so that the program will exit
+           // by returning a non-zero number.
+           return 1;
+       }
+       // Save file info. strdup will allocate additional memory so don't forget free it.
+       plTmp->task.fname      = strdup(fpath);
+       plTmp->task.start      = 0;
+       plTmp->task.end        = sb->st_size;
+       plTmp->task.outputPath = 1;
+       plTmp->next            = NULL;
+
+       // When tail and head point to the same node, will have conflict thus using lock protect.
+       pthread_mutex_lock(&workThreadPoolMux);
+       plTail->next = plTmp;
+       plTail       = plTail->next;
+
+       // TODO: Awake sleeped thread but the signal will lose if all thread is working now.
+	     //       Need a new approach.
+       //pthread_cond_signal(&workThreadPoolCond);
+       pthread_mutex_unlock(&workThreadPoolMux);
+
+    }
+
+    // return 0 to continue.
+    return 0;
+}
+
+
+/****************************************************************************
+ * function    : testList
+ * description : just for testing.
+ * argument(s) :
+ * return      :
+ ****************************************************************************/
+void
+testList(struct tasklist * head) {
+    struct tasklist *plTmp = NULL;
+    while (head != plTail && head->next != NULL) {
+        plTmp = head->next;
+        head->next = plTmp->next;
+        plTmp->next= NULL;
+       // printf("Patric name = %s, size = %d\n", plTmp->task.fname, plTmp->task.end - plTmp->task.start);
+        if (plTmp->task.fname != NULL) {
+            free(plTmp->task.fname);
+            plTmp->task.fname = NULL;
+        }
+        if (plTmp != NULL) {
+            free(plTmp);
+            plTmp = NULL;
+        }
+    }
+}
+
+/****************************************************************************
+ * function    : grepDirParallel
+ * description : search the directory recursively
+ *               create and join the thread pool
+ * argument(s) :
+ * return      :
+ ****************************************************************************/
+void
+grepDirParallel(const char *path) {
+    int    flag = 0;
+    pthread_mutex_lock(&workThreadPoolMux);
+    // The head node used to point to files that need to be searched.
+    // Don't save actual file info into head node and just use for a pointer.
+    plHead =  (struct tasklist *) malloc (sizeof(struct tasklist));
+    if (plHead == NULL) {
+        return;
+    }
+    plHead->next = NULL;
+    plTail       = plHead;
+
+    // Don't go into the linked dir.
+    flag |= FTW_PHYS;
+
+    // Tell work threads that new tasks will be added into list, keep working.
+    finishedGrepSubDir = 0;
+    pthread_mutex_unlock(&workThreadPoolMux);
+
+    initThreadPool();
+
+    // Using nftw() recursive search all files.
+    nftw(path, addFilesIntoFreeList, MAXFILES, flag);
+
+    // Tell work threads that they could exit when finished current task.
+    pthread_mutex_lock(&workThreadPoolMux);
+    finishedGrepSubDir = 1;
+    pthread_mutex_unlock(&workThreadPoolMux);
+
+	  // Intenal testing. Exclusive with thread pool.
+    //testList(plHead);
+
+    joinThreadPool();
+
+    if (plHead != NULL) {
+        free (plHead);
+        plHead = NULL;
+    }
+
+    return;
+}
+
+
+/****************************************************************************
+ * function    : grepFileParallel
+ * description : divide a big file into several small parts.
+ * argument(s) :
+ * return      :
+ ****************************************************************************/
+void
+grepFileParallel(const char *file, long size, int threadNum) {
+    FILE*  fp     = NULL;
+    int    i      = 0;
+    int    posAdd = 0;
+    long   blockSize =  size / threadNum;
+    struct  task arg[threadNum];
+
+    if ((fp = fopen(file,"r")) == NULL) {
+		printf("Error: Could not open the file! \n");
+        return;
+    }
+
+    for (i = 0; i < threadNum - 1; i++) {
+        // Basic size of each block for threads.
+        arg[i].fname       = (char *)file;
+        arg[i].start       = i       * blockSize + posAdd;
+        arg[i].end         = (i + 1) * blockSize - 1 ;
+        arg[i].outputPath  = 0;
+
+        // Adjust the size to the next '\n', thus the file could be divided by line.
+        fseek(fp, arg[i].end, SEEK_SET);
+        for (posAdd = 0; fgetc(fp) != '\n'; posAdd++ );
+
+        arg[i].end += posAdd ;
+
+        // Start thread to grep sub-domain.
+        pthread_create(&workThread[i], NULL, grepFile, (void *)&arg[i]);
+    }
+
+    // The last domain is an irregular block compared with former blocks.
+    arg[threadNum - 1].fname      = (char *) file;
+    arg[threadNum - 1].start      = (threadNum - 1) * blockSize + posAdd;
+    arg[threadNum - 1].end        = size - 1;
+    arg[threadNum - 1].outputPath = 0;
+    pthread_create(&workThread[i], NULL, grepFile, (void *)&arg[i]);
+
+    // The file descriptor is only used in main thread.
+    // Thus, close it without influence for other threads.
+    fclose(fp);
+
+
+    for (i = 0; i < threadNum; i++) {
+        pthread_join(workThread[i],NULL);
+    }
+}
+
+
+/****************************************************************************
+ * function    : main
+ * description :
+ *               grep PATTERN FILE
+ *               grep PATTERN DIR
+ * argument(s) :
+ * return      :
+ ****************************************************************************/
+int
+main(int argc, char *argv[]) {
+
+    struct stat info;
+
+    parseArg(argc,argv);
+
+    while (indexFile < argc) {
+        if (lstat(argv[indexFile], &info) == -1) {
+            printf("Error: Could not open the specified file or directory.\n");
+        }
+
+        // The marco S_ISDIR is defined in stat.h
+        if (S_ISDIR(info.st_mode)) {
+            // Recursive search if "-r" option is used.
+            if (grepDirRec == 1) {
+                grepDirParallel(argv[indexFile]);
+            }
+        } else {
+            // For small files don't bother PARALLEL algrithm.
+            if ( info.st_size > threshold * MB ) {
+                grepFileParallel(argv[indexFile], info.st_size, THREADSNUM);
+            } else {
+                struct task fileInfo;
+                fileInfo.fname = argv[indexFile];
+                fileInfo.start = 0;
+                fileInfo.end   = info.st_size;
+				// Print out the file path when search more than one file.
+				if (indexFile > 3) {
+                    fileInfo.outputPath = 1;
+				} else {
+                    fileInfo.outputPath = 0;
+				}
+                grepFile((void *)&fileInfo);
+            }
+        }
+        // Deal with the next one.
+        ++indexFile;
+    }
+
+    return 0;
 }

@@ -5,5 +5,5 @@ cp -r $HOME/LanguageLessons-1/src_Go /tmp
 cd /tmp/src_Go
 
 # Run your experiment
-./go-grep programs sample.txt
+./go-grep massa sample.txt
 
