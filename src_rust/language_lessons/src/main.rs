@@ -8,7 +8,6 @@ use std::fs::File;
 use std::io;
 use std::io::Read;
 use std::path::PathBuf;
-
 use colored::*;
 use rayon::prelude::*;
 use regex::Regex;

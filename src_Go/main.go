@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"time"
 )
 
 func main() {
@@ -13,7 +14,12 @@ func main() {
 		fmt.Println("Usage: ./go-grep search_query filename.txt")
 		return
 	}
- 
+	start := time.Now() 
+
 	Grep(searchQuery, inputFile)
+
+	elapsed := time.Since(start)
+	fmt.Println("Time taken:", elapsed)
 }
+
  
