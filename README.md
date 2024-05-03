@@ -36,6 +36,39 @@ Abstract:
 7 Final Deliverable:
     Accompanied with a detailed project report, our final deliverable will include a GitHub repository filled with heavily documented source code for our programs. In addition, we will occupy the repository with detailed compilation and runtime instructions for the programs. In our report, we will perform an in depth performance analysis on the parallel program vs. serial program. Program analysis techniques which we have discussed in class will be implemented for this report. Here we will further delve into the discussion of which of these languages performs most optimally, development experience, current support for each language, and how this open sourced project might evolve in the future.
 
+ Running Test cases for every language.
+
+ Testing C
+
+./mass_compile.sh (-lpthread compilation script)
+cd into src_C directory then run the following 
+command below.
+sbatch ./multithread_grep.sh 
+
+Output will be in the slurm-out file
+
+
+cd into src_rust directory
+
+Testing Rust
+
+Run cargo build and cd into target then debug.
+Then the script should be in there where you will be able to run
+the following command below.
+
+sbatch ./multithread_grep.sh 
+
+Output will be in the slurm-out file
+
+Testing Go
+cd into src_Go directory then run the following 
+command below.
+
+sbatch ./runningGo.sh
+
+Output will be in the slurm-out file
+
+
 8 Cited Sources:
     Rust parallelism guide: Fearless Concurrency - The Rust Programming Language. (n.d.). https://doc.rust-lang.org/book ch16-00-concurrency.html 
     
