@@ -1,12 +1,12 @@
-extern create rayon;
-extern create regex;
-extern create structopt;
-extern create walkdir;
-extern create colored;
+extern crate rayon;
+extern crate structopt;
+extern crate walkdir;
+extern crate regex;
+extern crate colored;
 
 use std::fs::File;
-use std::io;
-use std::io::Read;
+use std::io::{self, BufReader};
+use std::io::prelude::*;
 use std::path::PathBuf;
 use colored::*;
 use rayon::prelude::*;
@@ -26,42 +26,35 @@ fn main() -> io::Result<()> {
     let opt = Opt::from_args();
     let regex = Regex::new(&opt.regex).expect("Could not parse regex!");
     if let Some(path) = opt.file {
-        let files = WalkDir::new(path).into_iter().collect::<Vec<_>>();
-        let matches = files
-            .into_par_iter()
-            .filter_map(|e| e.ok())
+        WalkDir::new(path)
+            .into_iter()
+            .filter_map(Result::ok)
             .filter(|dir_entry| dir_entry.path().is_file())
+            .par_bridge()
             .map(|dir_entry| {
-                File::open(dir_entry.path()).map(|mut file| {
-                    read_to_string(&mut file).map(|file_content| (dir_entry, file_content))
-                })
+                let file = File::open(dir_entry.path())?;
+                let mut reader = BufReader::new(file);
+                let mut file_content = String::new();
+                reader.read_to_string(&mut file_content)?;
+                Ok::<_, io::Error>((dir_entry, file_content))
             })
-            .filter_map(|e| e.ok())
-            .filter_map(|e| e.ok())
+            .filter_map(Result::ok)
             .map(|(dir_entry, file_content)| {
-                find_match(
-                    &regex,
-                    &format!("{}", dir_entry.path().display()),
-                    &file_content,
-                )
+                find_match(&regex, &format!("{}", dir_entry.path().display()), &file_content)
             })
-            .collect::<String>();
-        println!("{}", matches);
+            .collect::<Vec<_>>()
+            .iter()
+            .for_each(|matches| println!("{}", matches));
     } else {
         let mut file_content = String::new();
         let stdin = io::stdin();
-        stdin.lock().read_to_string(&mut file_content)?;
+        let mut stdin = stdin.lock();
+        stdin.read_to_string(&mut file_content)?;
         find_match(&regex, "stdin", &file_content);
     }
     Ok(())
 }
-fn read_to_string(file: &mut File) -> io::Result<String> {
-    let mut file_content = String::new();
-    match file.read_to_string(&mut file_content) {
-        Ok(..) => Ok(file_content),
-        Err(err) => Err(err),
-    }
-}
+
 fn find_match(regex: &Regex, file_path: &str, file_content: &str) -> String {
     let mut matches = String::new();
     for (line_number, line) in file_content.lines().enumerate() {
@@ -73,10 +66,9 @@ fn find_match(regex: &Regex, file_path: &str, file_content: &str) -> String {
                 &line[..mat.start()],
                 &line[mat.start()..mat.end()].red(),
                 &line[mat.end()..]
-            ))
+            ));
         }
     }
     matches
 }
 
-//2014-01-01
